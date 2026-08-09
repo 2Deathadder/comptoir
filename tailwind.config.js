@@ -1,2 +1,6 @@
 /** @type {import('tailwindcss').Config} */
-export default { content: ['./index.html','./src/**/*.{js,jsx}'], darkMode: 'class', theme: { extend: { colors: { ink:'#18231f', moss:'#496052', sage:'#e1e9df', coral:'#e7785d', sand:'#f7f5ef', gold:'#d5a84b' }, fontFamily:{ sans:['Inter','ui-sans-serif','system-ui'], display:['DM Sans','Inter','sans-serif'] } } }, plugins: [] }
+export default {
+  content: ['./index.html', './src/**/*.{js,jsx}'],
+  theme: { extend: { fontFamily: { sans: ['DM Sans', 'sans-serif'], display: ['Fraunces', 'serif'] } } },
+  plugins: []
+}
