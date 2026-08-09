@@ -1,0 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root{font-family:Inter,ui-sans-serif,system-ui;background:#f7f5ef;color:#18231f}*{box-sizing:border-box}body{margin:0;min-width:320px}button,input,select,textarea{font:inherit}.card{@apply rounded-2xl border border-black/5 bg-white shadow-sm dark:border-white/10 dark:bg-white/[.06]}.eyebrow{@apply text-[11px] font-bold uppercase tracking-[.18em] text-moss dark:text-sage}.btn{@apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition active:scale-[.98]}.btn-primary{@apply btn bg-ink text-white hover:bg-moss}.btn-soft{@apply btn bg-sage text-ink hover:bg-[#d2dfcf] dark:bg-white/10 dark:text-white}.field{@apply w-full rounded-xl border border-black/10 bg-white px-3.5 py-3 text-sm outline-none focus:border-moss dark:border-white/10 dark:bg-black/10 dark:text-white}.status{@apply rounded-full px-2.5 py-1 text-[11px] font-bold}
