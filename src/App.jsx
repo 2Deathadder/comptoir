@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { ChefHat, ClipboardList, Coffee, CreditCard, LayoutGrid, LogOut, Menu as MenuIcon, Plus, Settings2, ShoppingBag, Sun, Trash2, Users, Utensils, X, Check, ArrowRight } from 'lucide-react'
+import { Canvas, useFrame } from '@react-three/fiber'
 
 const roles = { gerant:'Gérant', serveur:'Serveur', cuisinier:'Cuisinier', caissier:'Caissier' }
 const initialDishes = [
@@ -12,6 +13,17 @@ const initialDishes = [
 ]
 const seedOrders = [{id:'CMD-104', table:4, status:'cooking', items:[{name:'Volaille rôtie', qty:2, price:24},{name:'Tarte fine aux pommes', qty:1, price:10}], total:58}]
 const money = n => new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(n)
+
+function RotatingTorus(){
+  const ref = useRef()
+  useFrame((_, delta) => { if(ref.current){ ref.current.rotation.x += delta; ref.current.rotation.y += delta * 0.7 } })
+  return (
+    <mesh ref={ref} scale={[0.9,0.9,0.9]}>
+      <torusGeometry args={[0.8,0.28,16,64]} />
+      <meshStandardMaterial color="#151412" metalness={0.6} roughness={0.25} />
+    </mesh>
+  )
+}
 
 function App(){
   const [user,setUser] = useState(()=>JSON.parse(localStorage.getItem('lc-user')||'null'))
@@ -34,7 +46,11 @@ function App(){
     {activeTable&&<OrderPanel table={activeTable} dishes={dishes} cart={cart} setCart={setCart} onClose={()=>setActiveTable(null)} onSend={()=>{if(!cart.length)return;const total=cart.reduce((a,x)=>a+x.price*x.qty,0);setOrders(o=>[...o,{id:'CMD-'+(105+o.length),table:activeTable,items:cart,status:'cooking',total}]);setTables(ts=>ts.map(t=>t.id===activeTable?{...t,status:'occupied'}:t));setCart([]);setActiveTable(null)}}/>}
   </div>
 }
-function Brand(){return <div className="flex items-center gap-3"><div className="rounded-xl bg-[#dc6b42] p-2"><Coffee size={20}/></div><div><p className="font-display text-xl">leComptoir</p><p className="text-[10px] uppercase tracking-[.2em] muted">restaurant ops</p></div></div>}
+function Brand(){return <div className="flex items-center gap-3"><div className="relative rounded-xl bg-[#dc6b42] p-2" style={{width:48,height:48}}><Coffee size={20}/><div className="hidden sm:block" style={{position:'absolute',right:-8,bottom:-8,width:48,height:48}}><Canvas style={{width:'48px',height:'48px'}} camera={{position:[0,0,5], fov:50}}>
+  <ambientLight intensity={0.6}/>
+  <directionalLight position={[2,2,2]} intensity={0.8}/>
+  <RotatingTorus />
+</Canvas></div></div><div><p className="font-display text-xl">leComptoir</p><p className="text-[10px] uppercase tracking-[.2em] muted">restaurant ops</p></div></div>}
 function NavItem({icon:Icon,label,active,onClick}){return <button onClick={onClick} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${active?'bg-[#dc6b42] text-white':'muted hover:bg-white/5 hover:text-white'}`}><Icon size={18}/>{label}</button>}
 function Login({onLogin}){const [role,setRole]=useState('gerant');return <div className="flex min-h-screen items-center justify-center bg-[#151412] p-5"><div className="w-full max-w-md"><Brand/><div className="card mt-10 p-7"><p className="text-xs font-bold uppercase tracking-[.2em] text-[#dc6b42]">Espace équipe</p><h1 className="mt-3 font-display text-3xl">Bon service.</h1><p className="mt-2 text-sm muted">Connectez-vous pour accéder à votre poste.</p><label className="mt-7 block text-sm font-semibold">Adresse email<input className="field mt-2" placeholder="prenom@lecomptoir.fr" /></label><label className="mt-4 block text-sm font-semibold">Mot de passe<input className="field mt-2" type="password" placeholder="••••••••" /></label><p className="mt-5 text-xs muted">Prototype local : choisissez un rôle pour explorer les permissions.</p><div className="mt-2 grid grid-cols-2 gap-2">{Object.entries(roles).map(([k,v])=><button key={k} onClick={()=>setRole(k)} className={`rounded-xl border p-3 text-left text-sm ${role===k?'border-[#dc6b42] bg-[#dc6b42]/15 text-white':'border-white/10 muted'}`}><Users size={15} className="mb-2"/>{v}</button>)}</div><button className="btn-primary mt-6 w-full" onClick={()=>onLogin({name:roles[role],role})}>Entrer dans le comptoir <ArrowRight size={16}/></button></div></div></div>}
 function Floor({tables,active,onSelect}){return <section><div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p className="text-sm muted">Vue opérationnelle</p><h2 className="mt-1 font-display text-4xl">La salle</h2></div><div className="flex gap-4 text-xs muted"><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-[#8cba8b]"/>Libre</span><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-[#dc6b42]"/>Occupée</span></div></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">{tables.map(t=><button key={t.id} onClick={()=>onSelect(t.id)} className={`card flex aspect-square flex-col items-center justify-center transition hover:-translate-y-1 ${active===t.id?'ring-2 ring-[#dc6b42]':''}`}><span className={`mb-3 grid h-12 w-12 place-items-center rounded-full ${t.status==='free'?'bg-[#8cba8b]/15 text-[#8cba8b]':'bg-[#dc6b42]/15 text-[#dc6b42]'}`}><span className="text-lg font-bold">{t.id}</span></span><span className="text-sm font-semibold">Table {t.id}</span><span className="mt-1 text-xs muted">{t.status==='free'?'Disponible':'En service'}</span></button>)}</div></section>}
