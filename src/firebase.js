@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
+import { getAuth } from 'firebase/auth'
 
 // Configuration Firebase réelle fournie
 const firebaseConfig = {
@@ -15,4 +16,5 @@ const firebaseConfig = {
 const configured = firebaseConfig.apiKey && firebaseConfig.apiKey !== 'À_REMPLACER'
 export const firebaseApp = configured ? initializeApp(firebaseConfig) : null
 export const db = firebaseApp ? getFirestore(firebaseApp) : null
+export const auth = firebaseApp ? getAuth(firebaseApp) : null
 export { configured }
