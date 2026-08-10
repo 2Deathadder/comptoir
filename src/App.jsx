@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { ChefHat, ClipboardList, Coffee, CreditCard, LayoutGrid, LogOut, Menu as MenuIcon, Plus, Settings2, ShoppingBag, Sun, Trash2, Users, Utensils, X, Check, ArrowRight } from 'lucide-react'
 import { Canvas, useFrame } from '@react-three/fiber'
+import { auth } from './firebase'
+import { signInWithEmailAndPassword, signOut as fbSignOut, onAuthStateChanged } from 'firebase/auth'
 
 const roles = { gerant:'Gérant', serveur:'Serveur', cuisinier:'Cuisinier', caissier:'Caissier' }
 const initialDishes = [
@@ -26,6 +28,7 @@ function RotatingTorus(){
 }
 
 function App(){
+  // existing local "team" authentication (prototype)
   const [user,setUser] = useState(()=>JSON.parse(localStorage.getItem('lc-user')||'null'))
   const [screen,setScreen] = useState('salle')
   const [theme,setTheme] = useState(()=>localStorage.getItem('lc-theme')||'dark')
@@ -34,15 +37,87 @@ function App(){
   const [tables,setTables] = useState(()=>JSON.parse(localStorage.getItem('lc-tables')||JSON.stringify(Array.from({length:12},(_,i)=>({id:i+1,status:i===3?'occupied':'free'})))))
   const [activeTable,setActiveTable] = useState(null)
   const [cart,setCart] = useState([])
+
+  // admin Firebase auth state
+  const [adminUser, setAdminUser] = useState(null)
+  const [adminLoading, setAdminLoading] = useState(false)
+  const [adminEmail, setAdminEmail] = useState('')
+  const [adminPassword, setAdminPassword] = useState('')
+  const [adminError, setAdminError] = useState(null)
+
   useEffect(()=>localStorage.setItem('lc-dishes',JSON.stringify(dishes)),[dishes]); useEffect(()=>localStorage.setItem('lc-orders',JSON.stringify(orders)),[orders]); useEffect(()=>localStorage.setItem('lc-tables',JSON.stringify(tables)),[tables]);
   useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('lc-theme',theme)},[theme])
+
+  // listen to Firebase auth state if auth is available
+  useEffect(()=>{
+    if(!auth) return
+    const unsub = onAuthStateChanged(auth,u=>{ setAdminUser(u) })
+    return unsub
+  },[])
+
+  // detect admin route
+  const isAdminPath = typeof window !== 'undefined' && window.location.pathname === '/admin'
+
+  // Admin sign-in handler
+  const handleAdminSignIn = async (e) => {
+    e && e.preventDefault && e.preventDefault()
+    if(!auth){ setAdminError('Authentification non configurée.'); return }
+    setAdminError(null)
+    setAdminLoading(true)
+    try{
+      await signInWithEmailAndPassword(auth, adminEmail, adminPassword)
+    }catch(err){
+      // Friendly messages for common auth errors
+      if(err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-email'){
+        setAdminError('Email ou mot de passe incorrect.')
+      }else{
+        setAdminError('Erreur de connexion : '+(err.message||err.code))
+      }
+    }finally{ setAdminLoading(false) }
+  }
+  const handleAdminSignOut = async () => { if(!auth) return; await fbSignOut(auth); setAdminUser(null) }
+
+  // If user visits /admin, protect the app: show only admin login until authenticated
+  if(isAdminPath){
+    // if firebase auth not configured show a clear message
+    if(!auth){
+      return (<div className="flex min-h-screen items-center justify-center bg-[#151412] p-5"><div className="card p-6 max-w-md text-center"><h2 className="font-display text-2xl">Admin — authentification indisponible</h2><p className="mt-3 muted">La configuration Firebase n'est pas active dans cette instance. L'accès administrateur est désactivé.</p></div></div>)
+    }
+    // if not signed in show admin login form
+    if(!adminUser){
+      return (<div className="flex min-h-screen items-center justify-center bg-[#151412] p-5">
+        <div className="w-full max-w-md">
+          <div className="card p-7">
+            <p className="text-xs font-bold uppercase tracking-[.2em] text-[#dc6b42]">Espace admin</p>
+            <h1 className="mt-3 font-display text-3xl">Connexion administrateur</h1>
+            <p className="mt-2 text-sm muted">Connectez-vous avec votre compte Firebase (email / mot de passe).</p>
+            <form onSubmit={handleAdminSignIn} className="mt-6">
+              <label className="block text-sm font-semibold">Email<input className="field mt-2" value={adminEmail} onChange={e=>setAdminEmail(e.target.value)} placeholder="admin@exemple.fr" type="email" required/></label>
+              <label className="mt-4 block text-sm font-semibold">Mot de passe<input className="field mt-2" value={adminPassword} onChange={e=>setAdminPassword(e.target.value)} type="password" placeholder="••••••••" required/></label>
+              {adminError && <p className="mt-3 text-sm text-[#f28b82]">{adminError}</p>}
+              <div className="mt-6 flex gap-2">
+                <button className="btn-primary w-full" disabled={adminLoading}>{adminLoading? 'Connexion...' : 'Se connecter'}</button>
+                <a href="/" className="btn-ghost w-full">Retour</a>
+              </div>
+              <p className="mt-3 text-xs muted">Aucun compte public : les comptes admin sont créés via la console Firebase.</p>
+            </form>
+          </div>
+        </div>
+      </div>)
+    }
+    // signed in admin: fall through and render the app normally (below) with admin controls visible
+  }
+
   if(!user) return <Login onLogin={u=>{setUser(u);localStorage.setItem('lc-user',JSON.stringify(u))}} />
   const can = p => user.role==='gerant' || p.includes(user.role)
   const nav = [{id:'salle',label:'Salle & commandes',icon:LayoutGrid,roles:['gerant','serveur']},{id:'cuisine',label:'Cuisine',icon:ChefHat,roles:['gerant','cuisinier']},{id:'caisse',label:'Caisse',icon:CreditCard,roles:['gerant','caissier']},{id:'menu',label:'Menu',icon:Utensils,roles:['gerant']}].filter(x=>can(x.roles))
   const select = id => {setScreen(id);setActiveTable(null);setCart([])}
   return <div className="noise min-h-screen bg-[#151412] text-[#f6f0e7]">
-    <aside className="fixed inset-y-0 z-20 hidden w-64 border-r border-white/10 bg-[#1b1916] p-5 lg:block"><Brand/><div className="mt-12 space-y-1">{nav.map(n=><NavItem key={n.id} {...n} active={screen===n.id} onClick={()=>select(n.id)}/>)}</div><div className="absolute bottom-5 left-5 right-5"><div className="mb-4 rounded-xl bg-[#25221e] p-3"><p className="text-xs muted">SESSION ACTIVE</p><p className="mt-1 font-semibold">{user.name}</p><p className="text-xs text-[#dc6b42]">{roles[user.role]}</p></div><button className="btn-ghost w-full" onClick={()=>{setUser(null);localStorage.removeItem('lc-user')}}><LogOut size={16}/>Se déconnecter</button></div></aside>
-    <main className="lg:ml-64"><header className="flex items-center justify-between border-b border-white/10 px-5 py-4 md:px-10"><div><p className="text-xs font-semibold uppercase tracking-[.2em] text-[#dc6b42]">leComptoir / {screen}</p><h1 className="mt-1 font-display text-2xl capitalize">{screen==='salle'?'Service du soir':screen}</h1></div><div className="flex items-center gap-2"><button className="btn-ghost !p-2.5" onClick={()=>setTheme(theme==='dark'?'light':'dark')}><Sun size={17}/></button><div className="hidden text-right sm:block"><p className="text-sm font-semibold">{user.name}</p><p className="text-xs muted">{roles[user.role]}</p></div></div></header><div className="border-b border-white/10 bg-[#1b1916] px-5 py-2 lg:hidden"><div className="flex gap-2 overflow-x-auto">{nav.map(n=><button key={n.id} onClick={()=>select(n.id)} className={`btn whitespace-nowrap !px-3 !py-2 ${screen===n.id?'bg-[#dc6b42]':'bg-white/5'}`}><n.icon size={15}/>{n.label}</button>)}</div></div><div className="p-5 md:p-10">{screen==='salle'&&<Floor tables={tables} active={activeTable} onSelect={t=>{setActiveTable(t);setCart([])}}/>}{screen==='menu'&&<Menu dishes={dishes} setDishes={setDishes}/>} {screen==='cuisine'&&<Kitchen orders={orders} setOrders={setOrders}/>} {screen==='caisse'&&<Cash orders={orders} setOrders={setOrders} tables={tables} setTables={setTables}/>}</div></main>
+    <aside className="fixed inset-y-0 z-20 hidden w-64 border-r border-white/10 bg-[#1b1916] p-5 lg:block"><Brand/><div className="mt-12 space-y-1">{nav.map(n=><NavItem key={n.id} {...n} active={screen===n.id} onClick={()=>select(n.id)}/>)}</div><div className="absolute bottom-5 left-5 right-5"><div className="mb-4 rounded-xl bg-[#25221e] p-3"><p className="text-xs muted">SESSION ACTIVE</p><p className="mt-1 font-semibold">{user.name}</p><p className="text-xs text-[#dc6b42]">{roles[user.role]}</p></div><div className="flex gap-2">
+      <button className="btn-ghost flex-1" onClick={()=>{setUser(null);localStorage.removeItem('lc-user')}}><LogOut size={16}/>Se déconnecter</button>
+      <a href="/admin" className="btn-ghost">Admin</a>
+    </div></div></aside>
+    <main className="lg:ml-64"><header className="flex items-center justify-between border-b border-white/10 px-5 py-4 md:px-10"><div><p className="text-xs font-semibold uppercase tracking-[.2em] text-[#dc6b42]">leComptoir / {screen}</p><h1 className="mt-1 font-display text-2xl capitalize">{screen==='salle'?'Service du soir':screen}</h1></div><div className="flex items-center gap-2"><button className="btn-ghost !p-2.5" onClick={()=>setTheme(theme==='dark'?'light':'dark')}><Sun size={17}/></button><div className="hidden text-right sm:block"><p className="text-sm font-semibold">{user.name}</p><p className="text-xs muted">{roles[user.role]}</p></div>{adminUser&&<div className="ml-3 flex items-center gap-2"><span className="text-xs muted">Admin</span><button className="btn-ghost !p-2" onClick={handleAdminSignOut}>Déconnexion admin</button></div>}</div></header><div className="border-b border-white/10 bg-[#1b1916] px-5 py-2 lg:hidden"><div className="flex gap-2 overflow-x-auto">{nav.map(n=><button key={n.id} onClick={()=>select(n.id)} className={`btn whitespace-nowrap !px-3 !py-2 ${screen===n.id?'bg-[#dc6b42]':'bg-white/5'}`}><n.icon size={15}/>{n.label}</button>)}</div></div><div className="p-5 md:p-10">{screen==='salle'&&<Floor tables={tables} active={activeTable} onSelect={t=>{setActiveTable(t);setCart([])}}/>}{screen==='menu'&&<Menu dishes={dishes} setDishes={setDishes}/>} {screen==='cuisine'&&<Kitchen orders={orders} setOrders={setOrders}/>} {screen==='caisse'&&<Cash orders={orders} setOrders={setOrders} tables={tables} setTables={setTables}/>}</div></main>
     {activeTable&&<OrderPanel table={activeTable} dishes={dishes} cart={cart} setCart={setCart} onClose={()=>setActiveTable(null)} onSend={()=>{if(!cart.length)return;const total=cart.reduce((a,x)=>a+x.price*x.qty,0);setOrders(o=>[...o,{id:'CMD-'+(105+o.length),table:activeTable,items:cart,status:'cooking',total}]);setTables(ts=>ts.map(t=>t.id===activeTable?{...t,status:'occupied'}:t));setCart([]);setActiveTable(null)}}/>}
   </div>
 }
